@@ -6,7 +6,6 @@ on:
   workflow_dispatch: {}
 
 env:
-  # Repos de ECR (no son secretos, solo nombres)
   ECR_REPO_FRONTEND: examen-frontend
   ECR_REPO_BACKEND: examen-backend
   ECR_REPO_DB: examen-db
@@ -43,14 +42,23 @@ jobs:
           docker build -t $ECR_REGISTRY/${ECR_REPO_FRONTEND}:${IMAGE_TAG} .
           docker push $ECR_REGISTRY/${ECR_REPO_FRONTEND}:${IMAGE_TAG}
 
-      # ---------- BACKEND ----------
-      - name: Build & push BACKEND
+      # ---------- BACKEND DESPACHOS ----------
+      - name: Build & push BACKEND Despachos
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
-          cd backend
-          docker build -t $ECR_REGISTRY/${ECR_REPO_BACKEND}:${IMAGE_TAG} .
-          docker push $ECR_REGISTRY/${ECR_REPO_BACKEND}:${IMAGE_TAG}
+          cd backend/back-Despachos_SpringBoot
+          docker build -t $ECR_REGISTRY/${ECR_REPO_BACKEND}:despachos-${IMAGE_TAG} .
+          docker push $ECR_REGISTRY/${ECR_REPO_BACKEND}:despachos-${IMAGE_TAG}
+
+      # ---------- BACKEND VENTAS ----------
+      - name: Build & push BACKEND Ventas
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          cd backend/back-Ventas_SpringBoot
+          docker build -t $ECR_REGISTRY/${ECR_REPO_BACKEND}:ventas-${IMAGE_TAG} .
+          docker push $ECR_REGISTRY/${ECR_REPO_BACKEND}:ventas-${IMAGE_TAG}
 
       # ---------- DB (opcional) ----------
       - name: Build & push DB
@@ -78,6 +86,16 @@ jobs:
             --name $EKS_CLUSTER_NAME
           kubectl config current-context
 
+      # ---------- Reemplazar {{ECR_URL}} en los manifests ----------
+      # Sin este paso, "kubectl apply" intenta usar el placeholder literal
+      # como nombre de imagen y falla en la primera aplicación.
+      - name: Sustituir ECR_URL en manifests
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          find ./k8s -type f -name "*.yaml" \
+            -exec sed -i "s|{{ECR_URL}}|${ECR_REGISTRY}|g" {} \;
+
       # ---------- Aplicar manifests base ----------
       - name: Aplicar manifests base (namespace, DB, servicios)
         env:
@@ -96,10 +114,17 @@ jobs:
         run: |
           kubectl apply -f k8s/backend-deployment.yaml -n $EKS_NAMESPACE
           kubectl apply -f k8s/backend-service.yaml -n $EKS_NAMESPACE
-          kubectl set image deployment/examen-backend \
-            backend=$ECR_REGISTRY/${ECR_REPO_BACKEND}:${IMAGE_TAG} \
+
+          kubectl set image deployment/examen-backend-despachos \
+            backend-despachos=$ECR_REGISTRY/${ECR_REPO_BACKEND}:despachos-${IMAGE_TAG} \
             -n $EKS_NAMESPACE
-          kubectl rollout status deployment/examen-backend -n $EKS_NAMESPACE
+
+          kubectl set image deployment/examen-backend-ventas \
+            backend-ventas=$ECR_REGISTRY/${ECR_REPO_BACKEND}:ventas-${IMAGE_TAG} \
+            -n $EKS_NAMESPACE
+
+          kubectl rollout status deployment/examen-backend-despachos -n $EKS_NAMESPACE --timeout=300s
+          kubectl rollout status deployment/examen-backend-ventas -n $EKS_NAMESPACE --timeout=300s
 
       # ---------- Actualizar FRONTEND en EKS ----------
       - name: Actualizar FRONTEND en EKS
@@ -109,10 +134,12 @@ jobs:
         run: |
           kubectl apply -f k8s/frontend-deployment.yaml -n $EKS_NAMESPACE
           kubectl apply -f k8s/frontend-service.yaml -n $EKS_NAMESPACE
+
           kubectl set image deployment/examen-frontend \
             frontend=$ECR_REGISTRY/${ECR_REPO_FRONTEND}:${IMAGE_TAG} \
             -n $EKS_NAMESPACE
-          kubectl rollout status deployment/examen-frontend -n $EKS_NAMESPACE
+
+          kubectl rollout status deployment/examen-frontend -n $EKS_NAMESPACE --timeout=300s
 
       # ---------- HPA (si existen los YAML) ----------
       - name: Aplicar HPA (opcional)
