@@ -1,0 +1,101 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: examen-backend-despachos
+  namespace: examen
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: examen-backend-despachos
+  template:
+    metadata:
+      labels:
+        app: examen-backend-despachos
+    spec:
+      containers:
+        - name: backend-despachos
+          # Apuntamos al repo general con su tag específico
+          image: {{ECR_URL}}/examen-backend:despachos-v1
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8081
+          env:
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:mysql://examen-db.examen:3306/bd_examen?allowPublicKeyRetrieval=true&useSSL=false"
+            - name: SPRING_DATASOURCE_USERNAME
+              value: "root"
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secret
+                  key: MYSQL_ROOT_PASSWORD
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          readinessProbe:
+            tcpSocket:
+              port: 8081
+            initialDelaySeconds: 60
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 8081
+            initialDelaySeconds: 90
+            periodSeconds: 15
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: examen-backend-ventas
+  namespace: examen
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: examen-backend-ventas
+  template:
+    metadata:
+      labels:
+        app: examen-backend-ventas
+    spec:
+      containers:
+        - name: backend-ventas
+          # Apuntamos al repo general con su tag específico
+          image: {{ECR_URL}}/examen-backend:ventas-v1
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8082
+          env:
+            - name: SERVER_PORT
+              value: "8082"
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:mysql://examen-db.examen:3306/bd_examen?allowPublicKeyRetrieval=true&useSSL=false"
+            - name: SPRING_DATASOURCE_USERNAME
+              value: "root"
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secret
+                  key: MYSQL_ROOT_PASSWORD
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          readinessProbe:
+            tcpSocket:
+              port: 8082
+            initialDelaySeconds: 60
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 8082
+            initialDelaySeconds: 90
+            periodSeconds: 15
