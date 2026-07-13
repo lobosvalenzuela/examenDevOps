@@ -87,8 +87,6 @@ jobs:
           kubectl config current-context
 
       # ---------- Reemplazar {{ECR_URL}} en los manifests ----------
-      # Sin este paso, "kubectl apply" intenta usar el placeholder literal
-      # como nombre de imagen y falla en la primera aplicación.
       - name: Sustituir ECR_URL en manifests
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
